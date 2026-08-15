@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "claim-verifier: flag citation-bearing claims for human checking against source full text"
+authors:
+  - family-names: Crocco
+    given-names: Oliver S.
+version: 0.1.0
+date-released: 2026-08-15
+license: MIT
+repository-code: "https://github.com/WarderHouse/claim-verifier"

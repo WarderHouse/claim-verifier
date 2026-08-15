@@ -1,0 +1,9 @@
+Training access and gender (synthetic source for the worked example).
+
+Our survey covered manufacturing and services firms in three economies.
+
+We found that women's participation in employer-provided training lagged
+men's by nine percentage points, and the gap was concentrated in
+manufacturing. In services the difference was not statistically significant.
+
+Limitations: cross-sectional data; participation was self-reported.

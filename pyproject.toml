@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "claim-verifier"
+dynamic = ["version"]
+description = "Flag citation-bearing claims in a manuscript whose cited full text may not say what the author claims. A triage aid for authors, reviewers, and editors; never a verdict."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Oliver S. Crocco" }]
+keywords = [
+    "citations",
+    "quotation errors",
+    "citation fidelity",
+    "research integrity",
+    "peer review",
+    "local llm",
+    "ollama",
+    "open science",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = ["requests>=2.31"]
+
+[project.scripts]
+claimverify = "claimverify.cli:main"
+
+[tool.hatch.version]
+path = "src/claimverify/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/claimverify"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["claimverify"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.15"]
