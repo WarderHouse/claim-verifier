@@ -43,7 +43,11 @@ _NARRATIVE = re.compile(
 )
 _SURNAME_RE = re.compile(SURNAME)
 _YEAR_RE = re.compile(YEAR)
-_REF_HEAD = re.compile(r"^\s*(references|bibliography|works cited)\s*$", re.IGNORECASE)
+# Tolerate markdown markers around the heading ("# References", "**References**"):
+# pandoc-converted .docx is a supported input path.
+_REF_HEAD = re.compile(
+    r"^[\s#*_]*(references|bibliography|works cited)[\s*_]*$", re.IGNORECASE
+)
 _CUE_WORDS = re.compile(
     r"^(?:see(?: also)?|e\.g\.|i\.e\.|cf\.|as cited in|for example|but see)[,\s]*",
     re.IGNORECASE,

@@ -86,3 +86,9 @@ def test_co_authors_and_et_al_captured():
     )
     narrative = claims[1].cites[0]
     assert (narrative.surname, narrative.et_al) == ("Crocco", True)
+
+
+def test_split_sections_tolerates_markdown_heading_markers():
+    for head in ("References", "**References**", "# References"):
+        body, refs = split_sections(f"Body text.\n{head}\nCrocco, O. S. (2018). T.")
+        assert "Crocco" in refs, head
