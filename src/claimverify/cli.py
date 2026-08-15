@@ -102,16 +102,16 @@ def main(argv: list[str] | None = None) -> int:
     assessed = 0
     for claim in claims:
         for cite in claim.cites:
-            source_path = bank.lookup(cite)
-            if source_path is None:
+            match = bank.lookup(cite)
+            if match is None:
                 unbanked.append(cite.display)
                 continue
             if args.max_pairs is not None and assessed >= args.max_pairs:
                 continue
-            passages = rank(claim.context, bank.passages_for(source_path))
+            passages = rank(claim.context, bank.passages_for(match.path))
             ref = pick_reference(refs.get(cite.key, []), cite)
             entry_text = ref.entry if ref else "(reference entry not parsed)"
-            label = f"{cite.display} [{source_path.name}]"
+            label = f"{cite.display} [{match.path.name}]"
             print(f"assessing {label} … ", end="", file=sys.stderr, flush=True)
             try:
                 assessment = provider.assess(claim, label, entry_text, passages)
@@ -120,7 +120,14 @@ def main(argv: list[str] | None = None) -> int:
 
                 assessment = Assessment(verdict="assessment_error", rationale=str(e))
             print(assessment.verdict, file=sys.stderr)
-            rows.append(Row(claim=claim, cite_key=label, assessment=assessment))
+            rows.append(
+                Row(
+                    claim=claim,
+                    cite_key=label,
+                    assessment=assessment,
+                    match_caution=match.score == 0,
+                )
+            )
             assessed += 1
 
     output = render(args.manuscript.name, args.model, rows, unbanked)

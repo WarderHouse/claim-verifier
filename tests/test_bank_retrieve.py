@@ -36,18 +36,27 @@ def test_co_authors_break_same_year_ties(tmp_path):
     (tmp_path / "Crocco-2021.txt").write_text("solo text", encoding="utf-8")
     bank = SourceBank(tmp_path)
     assert (
-        bank.lookup(CiteKey("Crocco", "2021", ("Grenier",))).name
+        bank.lookup(CiteKey("Crocco", "2021", ("Grenier",))).path.name
         == "Crocco and Grenier-2021.txt"
     )
     assert (
-        bank.lookup(CiteKey("Crocco", "2021", ("Cseh",))).name
+        bank.lookup(CiteKey("Crocco", "2021", ("Cseh",))).path.name
         == "Crocco and Cseh-2021.txt"
     )
     assert (
-        bank.lookup(CiteKey("Crocco", "2021", (), et_al=True)).name
+        bank.lookup(CiteKey("Crocco", "2021", (), et_al=True)).path.name
         == "Crocco et al.-2021.txt"
     )
-    assert bank.lookup(CiteKey("Crocco", "2021")).name == "Crocco-2021.txt"
+    assert bank.lookup(CiteKey("Crocco", "2021")).path.name == "Crocco-2021.txt"
+
+
+def test_zero_score_match_signals_caution(tmp_path):
+    (tmp_path / "Crocco-2023.txt").write_text("a different solo work", encoding="utf-8")
+    bank = SourceBank(tmp_path)
+    match = bank.lookup(CiteKey("Crocco", "2023", ("Rockett",)))
+    assert match.path.name == "Crocco-2023.txt"
+    assert match.score == 0  # cited work absent; caller must surface the caution
+    assert bank.lookup(CiteKey("Crocco", "2023")).score > 0
 
 
 def test_unknown_key_returns_none_not_error(tmp_path):
@@ -65,6 +74,6 @@ def test_chunking_bounds():
 
 def test_bm25_ranks_topical_passage_first(tmp_path):
     bank = make_bank(tmp_path)
-    passages = bank.passages_for(bank.lookup(CiteKey("Crocco", "2024")))
+    passages = bank.passages_for(bank.lookup(CiteKey("Crocco", "2024")).path)
     top = rank("women's participation in employer training lagged", passages, top_k=2)
     assert "womens participation" in top[0].text

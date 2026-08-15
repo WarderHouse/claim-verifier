@@ -38,6 +38,12 @@ class _Candidate:
     et_al: bool
 
 
+@dataclass
+class Match:
+    path: Path
+    score: int  # 0 = first author + year only; see SourceBank.lookup
+
+
 class SourceBank:
     def __init__(self, folder: Path, key_map: Path | None = None):
         self.folder = folder
@@ -62,10 +68,13 @@ class SourceBank:
             for key, filename in mapping.items():
                 self.by_key[key.lower()] = [_Candidate(folder / filename, (), False)]
 
-    def lookup(self, cite: CiteKey) -> Path | None:
+    def lookup(self, cite: CiteKey) -> Match | None:
         """Best candidate for the cited work: exact key first, then
         year-suffix-insensitive ('smith-2020a' ~ 'smith-2020'), co-authors
-        breaking first-author-year ties."""
+        breaking first-author-year ties. A zero score means the match rests
+        on first author and year alone; the caller should surface that as a
+        caution, because the bank may hold a same-author-same-year different
+        work while the cited one is simply absent."""
         candidates = self.by_key.get(cite.key)
         if not candidates:
             base = re.sub(r"[a-z]$", "", cite.key)
@@ -79,7 +88,7 @@ class SourceBank:
         best = max(
             candidates, key=lambda c: co_author_score(cite, c.co_authors, c.et_al)
         )
-        return best.path
+        return Match(best.path, co_author_score(cite, best.co_authors, best.et_al))
 
     def passages_for(self, path: Path | None) -> list[Passage]:
         if path is None:

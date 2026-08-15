@@ -30,6 +30,7 @@ class Row:
     claim: Claim
     cite_key: str
     assessment: Assessment
+    match_caution: bool = False  # bank match rested on first author + year alone
 
 
 def render(
@@ -71,6 +72,14 @@ def render(
         lines.append("")
         lines.append(f"> {row.claim.sentence}")
         lines.append("")
+        if row.match_caution:
+            lines.append(
+                "Caution: the bank file was matched on first author and year "
+                "alone. Confirm it is the cited work; the bank may hold a "
+                "different same-author-same-year work while the cited one is "
+                "absent."
+            )
+            lines.append("")
         if row.claim.secondary:
             lines.append(
                 'Secondary citation ("as cited in"): check the primary source directly.'

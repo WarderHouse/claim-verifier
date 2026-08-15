@@ -107,7 +107,13 @@ rather than silently skipped. Where a filename cannot carry the key, pass
 - The claim unit is one sentence (with one sentence of context either side);
   claims built across paragraphs are checked sentence by sentence.
 - First-author-surname + year matching can collide when two cited works share
-  both; use `--map` to disambiguate.
+  both. Cited co-author surnames break ties against the bank's filenames, and
+  a pair whose bank match rested on first author and year alone carries an
+  explicit caution in the report (the bank may hold a same-author-same-year
+  different work while the cited one is absent); use `--map` to disambiguate.
+- Organizational authors (United Nations, World Bank) parse imperfectly; they
+  usually surface as oddly keyed unverifiable entries rather than bad
+  assessments.
 - Retrieval is lexical (BM25). A paraphrase sharing no vocabulary with its
   source can rank low, which is one reason "not found" is a flag, not a verdict.
 - Small local models are more conservative and less precise than frontier
