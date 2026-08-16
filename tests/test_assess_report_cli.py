@@ -104,3 +104,27 @@ def test_cli_list_claims(tmp_path, capsys):
     )
     assert rc == 0
     assert "crocco-2018" in capsys.readouterr().out
+
+
+def test_ollama_provider_falls_back_and_caches_mode(monkeypatch):
+    from claimverify.assess import OllamaProvider
+
+    provider = OllamaProvider("fake-reasoning-model")
+    calls = []
+
+    def fake_call(extra, claim, cite_key, ref_entry, passages):
+        calls.append(extra)
+        if "format" in extra:
+            return ""  # strict-format mode returns an empty body
+        return json.dumps(
+            {"verdict": "consistent", "citation_function": "empirical_finding"}
+        )
+
+    monkeypatch.setattr(provider, "_call", fake_call)
+    claim = Claim(sentence="s", context="c")
+    first = provider.assess(claim, "k", "r", [])
+    assert first.verdict == "consistent"
+    assert calls == [{"format": "json"}, {"think": False}]
+    second = provider.assess(claim, "k", "r", [])
+    assert second.verdict == "consistent"
+    assert calls[2:] == [{"think": False}]  # cached mode goes first now

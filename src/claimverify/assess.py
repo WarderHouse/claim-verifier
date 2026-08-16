@@ -111,17 +111,43 @@ def _parse(raw: str, passages: list[Passage]) -> Assessment:
 
 
 class OllamaProvider:
-    """Local assessment via the Ollama HTTP API. Nothing leaves the machine."""
+    """Local assessment via the Ollama HTTP API. Nothing leaves the machine.
+
+    Request modes, tried in order until one parses: strict JSON format (fast
+    path for models with reliable structured output, e.g. the qwen2.5 family);
+    no format constraint with thinking disabled (reasoning models can return an
+    empty or non-JSON body under a strict format constraint); bare request
+    (hosts or models that reject the think field). The first mode that succeeds
+    is cached for the rest of the run.
+    """
 
     name = "ollama"
 
     def __init__(self, model: str, host: str = "http://localhost:11434"):
         self.model = model
         self.host = host
+        self._mode: int | None = None
 
     def assess(
         self, claim: Claim, cite_key: str, ref_entry: str, passages: list[Passage]
     ) -> Assessment:
+        modes: list[dict] = [{"format": "json"}, {"think": False}, {}]
+        order = [self._mode] if self._mode is not None else []
+        order += [i for i in range(len(modes)) if i not in order]
+        last = Assessment(verdict="assessment_error")
+        for i in order:
+            try:
+                raw = self._call(modes[i], claim, cite_key, ref_entry, passages)
+            except requests.RequestException as e:
+                last = Assessment(verdict="assessment_error", rationale=str(e))
+                continue
+            last = _parse(raw, passages)
+            if last.verdict != "assessment_error":
+                self._mode = i
+                return last
+        return last
+
+    def _call(self, extra, claim, cite_key, ref_entry, passages) -> str:
         resp = requests.post(
             f"{self.host}/api/generate",
             json={
@@ -129,13 +155,13 @@ class OllamaProvider:
                 "system": SYSTEM_PROMPT,
                 "prompt": build_user_prompt(claim, cite_key, ref_entry, passages),
                 "stream": False,
-                "format": "json",
                 "options": {"temperature": 0, "num_ctx": 8192},
+                **extra,
             },
             timeout=600,
         )
         resp.raise_for_status()
-        return _parse(resp.json().get("response", ""), passages)
+        return resp.json().get("response", "")
 
 
 class AnthropicProvider:
