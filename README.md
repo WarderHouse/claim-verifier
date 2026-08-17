@@ -1,5 +1,9 @@
 # claim-verifier
 
+[![CI](https://github.com/WarderHouse/claim-verifier/actions/workflows/ci.yml/badge.svg)](https://github.com/WarderHouse/claim-verifier/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/claim-verifier)](https://pypi.org/project/claim-verifier/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21985256.svg)](https://doi.org/10.5281/zenodo.21985256)
+
 Flag citation-bearing claims in a manuscript whose cited full text may not say
 what the author claims. `claimverify` reads a manuscript, finds every sentence
 that carries an APA in-text citation, retrieves the most relevant passages from

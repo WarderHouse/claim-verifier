@@ -9,3 +9,4 @@ version: 0.2.0
 date-released: 2026-08-17
 license: MIT
 repository-code: "https://github.com/WarderHouse/claim-verifier"
+doi: 10.5281/zenodo.21985256
