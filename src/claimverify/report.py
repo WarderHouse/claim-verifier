@@ -1,4 +1,10 @@
-"""Render the markdown report, ranked so the riskiest flags come first."""
+"""Render the markdown report, ranked so the riskiest flags come first.
+
+Quoted material (manuscript sentences, source passages, model text) is
+markdown-escaped: a hostile or merely unlucky source could otherwise smuggle
+a remote image (a beacon on report open) or counterfeit structure into the
+report.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +18,7 @@ _HEADINGS = {
     "not_found": "Not found in the passages retrieved",
     "partially_consistent": "Partially consistent (check the shift)",
     "assessment_error": "Assessment errors (re-run or check by hand)",
+    "not_assessed": "Not assessed (retrieval only): passages for your own read",
     "not_checkable": "No checkable assertion",
     "consistent": "Consistent with the retrieved passages",
     "unverifiable": "Unverifiable (no full text in the bank)",
@@ -25,6 +32,11 @@ flagged source is yours.
 """
 
 
+def _md_safe(text: str) -> str:
+    """Neutralize markdown that would render as markup inside quoted content."""
+    return text.replace("<", "\\<").replace("![", "!\\[")
+
+
 @dataclass
 class Row:
     claim: Claim
@@ -34,7 +46,11 @@ class Row:
 
 
 def render(
-    manuscript_name: str, model_spec: str, rows: list[Row], unbanked: list[str]
+    manuscript_name: str,
+    model_spec: str,
+    rows: list[Row],
+    unbanked: list[str],
+    skipped_pairs: int = 0,
 ) -> str:
     order = {v: i for i, v in enumerate(RISK_ORDER)}
     rows = sorted(rows, key=lambda r: order.get(r.assessment.verdict, len(order)))
@@ -57,9 +73,17 @@ def render(
     for verdict in RISK_ORDER:
         if counts.get(verdict):
             lines.append(f"| {_HEADINGS[verdict]} | {counts[verdict]} |")
-    if unbanked:
-        lines.append(f"| {_HEADINGS['unverifiable']} | {len(unbanked)} |")
+    unique_unbanked = sorted(set(unbanked))
+    if unique_unbanked:
+        lines.append(f"| {_HEADINGS['unverifiable']} | {len(unique_unbanked)} |")
     lines.append("")
+    if skipped_pairs:
+        lines.append(
+            f"{skipped_pairs} further claim-source pairs were not assessed "
+            "because --max-pairs capped the run; this report under-covers the "
+            "manuscript by that many pairs."
+        )
+        lines.append("")
 
     current = None
     for row in rows:
@@ -70,14 +94,15 @@ def render(
         a = row.assessment
         lines.append(f"### {row.cite_key}")
         lines.append("")
-        lines.append(f"> {row.claim.sentence}")
+        lines.append(f"> {_md_safe(row.claim.sentence)}")
         lines.append("")
         if row.match_caution:
             lines.append(
                 "Caution: the bank file was matched on first author and year "
-                "alone. Confirm it is the cited work; the bank may hold a "
-                "different same-author-same-year work while the cited one is "
-                "absent."
+                "alone (or by a year-suffix fallback, or against tied "
+                "candidates). Confirm it is the cited work; the bank may hold "
+                "a different same-author-same-year work while the cited one "
+                "is absent."
             )
             lines.append("")
         if row.claim.secondary:
@@ -91,24 +116,30 @@ def render(
             )
             lines.append("")
         if a.rationale:
-            lines.append(a.rationale)
+            lines.append(_md_safe(a.rationale))
             lines.append("")
-        if a.evidence_quote:
-            lines.append(f'Evidence from the source: "{a.evidence_quote}"')
+        if verdict == "not_assessed" and a.passages:
+            lines.append("Retrieved passages:")
             lines.append("")
-        elif a.verdict in ("not_found", "possible_conflict") and a.passages:
+            for p in a.passages:
+                lines.append(f"> {_md_safe(p.text[:900])}")
+                lines.append("")
+        elif a.evidence_quote:
+            lines.append(f'Evidence from the source: "{_md_safe(a.evidence_quote)}"')
+            lines.append("")
+        elif verdict in ("not_found", "possible_conflict") and a.passages:
             lines.append("Top retrieved passage, for your own read:")
             lines.append("")
-            lines.append(f"> {a.passages[0].text[:600]}")
+            lines.append(f"> {_md_safe(a.passages[0].text[:600])}")
             lines.append("")
 
-    if unbanked:
+    if unique_unbanked:
         lines += [f"## {_HEADINGS['unverifiable']}", ""]
         lines.append(
             "These cited works had no full text in the bank, so nothing was checked:"
         )
         lines.append("")
-        for key in sorted(set(unbanked)):
+        for key in unique_unbanked:
             lines.append(f"- {key}")
         lines.append("")
 

@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Sync (frozen)
+        run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format check
+        run: uv run ruff format --check .
+      - name: Test
+        run: uv run pytest -q
+      - name: Version consistency (CITATION.cff vs package)
+        run: |
+          pkg=$(grep -oE '__version__ = "[^"]+"' src/claimverify/__init__.py | cut -d'"' -f2)
+          cff=$(grep -oE '^version: .+' CITATION.cff | cut -d' ' -f2)
+          test "$pkg" = "$cff" || { echo "version mismatch: package $pkg vs CITATION.cff $cff"; exit 1; }

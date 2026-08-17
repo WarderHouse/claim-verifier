@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -62,6 +63,14 @@ def main(argv: list[str] | None = None) -> int:
         build_parser().print_help()
         return 2
 
+    if args.out and not args.out.parent.exists():
+        # Fail before the model run, not after it: a bad --out path discovered
+        # at write time would discard the whole run's work.
+        print(
+            f"error: --out directory does not exist: {args.out.parent}", file=sys.stderr
+        )
+        return 1
+
     try:
         text = read_text(args.manuscript)
     except (TextExtractionError, OSError) as e:
@@ -75,9 +84,20 @@ def main(argv: list[str] | None = None) -> int:
         refs.setdefault(ref.key, []).append(ref)
 
     if args.list_claims:
+        bank = None
+        if args.bank and args.bank.is_dir():
+            try:
+                bank = SourceBank(args.bank, key_map=args.map)
+            except (OSError, ValueError):
+                bank = None
         for claim in claims:
-            keys = ", ".join(k.display for k in claim.cites)
-            print(f"[{keys}] {claim.sentence}")
+            parts = []
+            for k in claim.cites:
+                marker = ""
+                if bank is not None and bank.lookup(k) is None:
+                    marker = " [no full text]"
+                parts.append(f"{k.display}{marker}")
+            print(f"[{', '.join(parts)}] {claim.sentence}")
         print(
             f"\n{len(claims)} citation-bearing sentences; {len(refs)} reference entries parsed.",
             file=sys.stderr,
@@ -89,17 +109,33 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError) as e:
         print(f"error reading bank: {e}", file=sys.stderr)
         return 1
+    if bank.skipped:
+        print(
+            "bank: skipped (no recognizable Author-Year filename): "
+            + ", ".join(bank.skipped),
+            file=sys.stderr,
+        )
     try:
         provider = make_provider(args.model)
     except (ValueError, RuntimeError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
+    from .assess import Assessment
     from .retrieve import rank
+
+    def safe_error(e: Exception) -> str:
+        # Exception text becomes report content; never let a secret ride along.
+        msg = f"{type(e).__name__}: {e}"
+        key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        if key:
+            msg = msg.replace(key, "[redacted]")
+        return msg
 
     rows: list[Row] = []
     unbanked: list[str] = []
     assessed = 0
+    skipped_overflow = 0
     for claim in claims:
         for cite in claim.cites:
             match = bank.lookup(cite)
@@ -107,30 +143,46 @@ def main(argv: list[str] | None = None) -> int:
                 unbanked.append(cite.display)
                 continue
             if args.max_pairs is not None and assessed >= args.max_pairs:
+                skipped_overflow += 1
                 continue
             passages = rank(claim.context, bank.passages_for(match.path))
             ref = pick_reference(refs.get(cite.key, []), cite)
             entry_text = ref.entry if ref else "(reference entry not parsed)"
             label = f"{cite.display} [{match.path.name}]"
             print(f"assessing {label} … ", end="", file=sys.stderr, flush=True)
-            try:
-                assessment = provider.assess(claim, label, entry_text, passages)
-            except Exception as e:  # noqa: BLE001 - fail soft per pair, keep the run
-                from .assess import Assessment
-
-                assessment = Assessment(verdict="assessment_error", rationale=str(e))
+            if not passages:
+                assessment = Assessment(
+                    verdict="assessment_error",
+                    rationale="No text could be extracted from the matched "
+                    "source file (scanned PDF without a text layer, or an "
+                    "unreadable file); check it by hand.",
+                )
+            else:
+                try:
+                    assessment = provider.assess(claim, label, entry_text, passages)
+                except Exception as e:  # noqa: BLE001 - fail soft per pair, keep the run
+                    assessment = Assessment(
+                        verdict="assessment_error", rationale=safe_error(e)
+                    )
             print(assessment.verdict, file=sys.stderr)
             rows.append(
                 Row(
                     claim=claim,
                     cite_key=label,
                     assessment=assessment,
-                    match_caution=match.score == 0,
+                    match_caution=match.score <= 0,
                 )
             )
             assessed += 1
+    if skipped_overflow:
+        print(
+            f"{skipped_overflow} pairs beyond --max-pairs were not assessed.",
+            file=sys.stderr,
+        )
 
-    output = render(args.manuscript.name, args.model, rows, unbanked)
+    output = render(
+        args.manuscript.name, args.model, rows, unbanked, skipped_pairs=skipped_overflow
+    )
     if args.out:
         args.out.write_text(output, encoding="utf-8")
         print(f"report written to {args.out}", file=sys.stderr)

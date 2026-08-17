@@ -41,6 +41,7 @@ RISK_ORDER = [
     "not_found",
     "partially_consistent",
     "assessment_error",
+    "not_assessed",
     "not_checkable",
     "consistent",
     "unverifiable",
@@ -99,12 +100,18 @@ def _parse(raw: str, passages: list[Passage]) -> Assessment:
     verdict = str(data.get("verdict", "")).strip()
     if verdict not in VERDICTS:
         return Assessment(verdict="assessment_error", raw=raw)
+
+    # Model-returned strings can carry newlines that would forge report
+    # structure (a rationale containing "\n## ..." renders as a heading).
+    def flat(value: object) -> str:
+        return re.sub(r"\s+", " ", str(value)).strip()
+
     return Assessment(
         verdict=verdict,
-        citation_function=str(data.get("citation_function", "")),
-        evidence_quote=str(data.get("evidence_quote", "")),
-        rationale=str(data.get("rationale", "")),
-        confidence=str(data.get("confidence", "")),
+        citation_function=flat(data.get("citation_function", "")),
+        evidence_quote=flat(data.get("evidence_quote", "")),
+        rationale=flat(data.get("rationale", "")),
+        confidence=flat(data.get("confidence", "")),
         passages=passages,
         raw=raw,
     )
@@ -127,6 +134,12 @@ class OllamaProvider:
         self.model = model
         self.host = host
         self._mode: int | None = None
+        # trust_env=False ignores HTTP(S)_PROXY and system proxy settings:
+        # on proxied (often university-managed) machines, requests would
+        # otherwise route even localhost calls through the proxy, silently
+        # breaking the nothing-leaves-your-machine promise.
+        self._session = requests.Session()
+        self._session.trust_env = False
 
     def assess(
         self, claim: Claim, cite_key: str, ref_entry: str, passages: list[Passage]
@@ -148,7 +161,7 @@ class OllamaProvider:
         return last
 
     def _call(self, extra, claim, cite_key, ref_entry, passages) -> str:
-        resp = requests.post(
+        resp = self._session.post(
             f"{self.host}/api/generate",
             json={
                 "model": self.model,
@@ -172,9 +185,16 @@ class AnthropicProvider:
 
     def __init__(self, model: str):
         self.model = model or "claude-sonnet-5"
-        self.api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        self.api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
         if not self.api_key:
             raise RuntimeError("ANTHROPIC_API_KEY is not set.")
+        if not re.fullmatch(r"[\x21-\x7e]+", self.api_key):
+            # Never echo the value: a malformed key inside an exception message
+            # could end up in a report a user shares.
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY contains whitespace or non-printable "
+                "characters; re-export it cleanly."
+            )
 
     def assess(
         self, claim: Claim, cite_key: str, ref_entry: str, passages: list[Passage]
@@ -216,8 +236,9 @@ class NullProvider:
         self, claim: Claim, cite_key: str, ref_entry: str, passages: list[Passage]
     ) -> Assessment:
         return Assessment(
-            verdict="not_found",
-            rationale="No model configured; passages retrieved for manual review.",
+            verdict="not_assessed",
+            rationale="No model configured; the retrieved passages follow for "
+            "your own read.",
             passages=passages,
         )
 

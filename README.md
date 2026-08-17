@@ -7,12 +7,14 @@ a folder of cited-source full texts you supply, and asks a language model (a
 local one by default) whether each passage matches what the sentence attributes
 to that source. The output is a ranked markdown report a human works through.
 
-It is a triage aid, not a judge. Quotation-error studies in medicine estimate
-that roughly one in six citations misrepresents its source in some way
-(Baethge & Jergas, 2025, https://doi.org/10.1186/s41073-025-00173-z; Jergas &
-Baethge, 2015, https://doi.org/10.7717/peerj.1364), and neither reviewers nor
-editors routinely check. This tool exists to make the check cheap enough to
-happen. The final read of any flagged citation is yours.
+It is a triage aid, not a judge. The most recent meta-analysis of quotation
+errors in medicine estimates that roughly one in six citations misstates its
+source in some way, with no improvement over time (Baethge & Jergas, 2025,
+https://doi.org/10.1186/s41073-025-00173-z); the earlier meta-analysis put the
+total error rate near one in four (Jergas & Baethge, 2015,
+https://doi.org/10.7717/peerj.1364). Neither reviewers nor editors routinely
+check. This tool exists to make the check cheap enough to happen. The final
+read of any flagged citation is yours.
 
 ## What it does and does not establish
 
@@ -39,20 +41,30 @@ Each claim-source pair gets one of:
 | `consistent` | the passages state what the claim attributes to the source |
 | `not_checkable` | background, seminal, or methods citation; no assertion to check |
 | `unverifiable` | no full text for this source in the bank |
+| `assessment_error` | the model call failed, or the matched file yielded no text (scanned PDF); check by hand |
+| `not_assessed` | `--model none` runs: passages retrieved for your own read, no judgment made |
 
 The report is ordered by risk, so the pairs worth human time come first.
 
 ## Confidentiality
 
 With the default local model, **nothing leaves your machine**: the only network
-traffic is to your own Ollama server on localhost. This is the intended mode
-for manuscripts under review, which you may not upload to third-party
-services. The optional `anthropic:` provider sends claim sentences and source
-passages to the Anthropic API; use it only for manuscripts you are entitled to
-share (for example, your own drafts). No telemetry, ever. See
-[CONFIDENTIALITY.md](CONFIDENTIALITY.md).
+traffic is to your own Ollama server on localhost, and the tool ignores
+`HTTP(S)_PROXY` and system proxy settings for that call, so a managed
+machine's proxy cannot silently intercept it. This is the intended mode for
+manuscripts under review, which you may not upload to third-party services.
+The optional `anthropic:` provider sends claim sentences, reference entries,
+bank filenames, and source passages to the Anthropic API; use it only for
+manuscripts you are entitled to share (for example, your own drafts). No
+telemetry, ever. See [CONFIDENTIALITY.md](CONFIDENTIALITY.md).
 
 ## Install
+
+```bash
+pip install claim-verifier
+```
+
+Or from source:
 
 ```bash
 git clone https://github.com/WarderHouse/claim-verifier
@@ -68,6 +80,9 @@ or `apt install poppler-utils`). Local assessment needs
 ## Quickstart
 
 ```bash
+# Offline smoke test on the bundled synthetic example (no PDFs, no model)
+claimverify --manuscript examples/manuscript.md --bank examples/sources --model none
+
 # See what would be checked, with no model call at all
 claimverify --manuscript paper.pdf --bank ./sources --list-claims
 
@@ -78,15 +93,19 @@ claimverify --manuscript paper.pdf --bank ./sources --out report.md
 claimverify --manuscript paper.pdf --bank ./sources \
     --model ollama:qwen2.5:32b --max-pairs 20 --out report.md
 
-# Retrieval only: no LLM, just the passages for manual checking
+# Retrieval only: no LLM; every pair is reported "not assessed" with its
+# retrieved passages printed for manual checking
 claimverify --manuscript paper.pdf --bank ./sources --model none
 ```
 
 The bank is a folder of full texts (`.pdf`, `.txt`, `.md`) named so the first
 author's surname and year are recoverable, e.g. `Garavan et al.-2019.pdf` or
-`garavan_2019.txt`. References with no bank file are listed as unverifiable
-rather than silently skipped. Where a filename cannot carry the key, pass
-`--map map.json` with entries like `{"garavan-2019": "odd_filename.pdf"}`.
+`garavan_2019.txt`. Files whose names carry no recognizable author-year are
+listed on stderr as skipped, and references with no bank file are listed as
+unverifiable, rather than anything being silently dropped. Where a filename
+cannot carry the key, pass `--map map.json` with entries like
+`{"garavan-2019": "odd_filename.pdf"}`; map targets must exist inside the bank
+folder.
 
 ## How it works
 
@@ -107,13 +126,23 @@ rather than silently skipped. Where a filename cannot carry the key, pass
 - The claim unit is one sentence (with one sentence of context either side);
   claims built across paragraphs are checked sentence by sentence.
 - First-author-surname + year matching can collide when two cited works share
-  both. Cited co-author surnames break ties against the bank's filenames, and
-  a pair whose bank match rested on first author and year alone carries an
-  explicit caution in the report (the bank may hold a same-author-same-year
-  different work while the cited one is absent); use `--map` to disambiguate.
-- Organizational authors (United Nations, World Bank) parse imperfectly; they
-  usually surface as oddly keyed unverifiable entries rather than bad
-  assessments.
+  both. Cited co-author surnames break ties against the bank's filenames
+  (co-authors the citation does not name count against a candidate), and a
+  pair whose match rested on first author and year alone, on a year-suffix
+  fallback, or on a tie carries an explicit caution in the report (the bank
+  may hold a same-author-same-year different work while the cited one is
+  absent); use `--map` to disambiguate. Lettered same-year works (2020a vs
+  2020b) are never cross-matched.
+- Organizational authors (United Nations, World Bank) parse imperfectly; in
+  narrative position ("The World Bank (2020) reported...") they can key on the
+  final word or be dropped, so they usually surface as oddly keyed
+  unverifiable entries rather than bad assessments.
+- Surnames the ASCII pattern cannot represent (diacritics such as Nuñez or
+  Bürkner) are dropped as misses rather than truncated into wrong keys.
+- The source text sits inside the model prompt, so a hostile source file can
+  in principle influence its own verdict; treat verdicts on untrusted sources
+  as advisory, and read reports in a viewer that does not auto-load remote
+  content (quoted material is markdown-escaped as a second line of defense).
 - Retrieval is lexical (BM25). A paraphrase sharing no vocabulary with its
   source can rank low, which is one reason "not found" is a flag, not a verdict.
 - Small local models are more conservative and less precise than frontier

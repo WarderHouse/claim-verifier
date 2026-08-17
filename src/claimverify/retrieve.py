@@ -12,6 +12,7 @@ import re
 from collections import Counter
 
 from .bank import Passage
+from .extract import strip_citation_noise
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 K1, B = 1.5, 0.75
@@ -49,7 +50,9 @@ def rank(query: str, passages: list[Passage], top_k: int = 4) -> list[Passage]:
             s += idf * tf[term] * (K1 + 1) / denom
         return s
 
-    q = tokenize(query)
+    # Citation markers and bare years in the query make the source's own
+    # reference list outrank its body text; strip them before tokenizing.
+    q = tokenize(strip_citation_noise(query))
     scored = sorted(
         zip(passages, docs, strict=True), key=lambda pd: score(q, pd[1]), reverse=True
     )

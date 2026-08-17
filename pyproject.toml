@@ -31,9 +31,15 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
 ]
-dependencies = ["requests>=2.31"]
+dependencies = ["requests>=2.31,<3"]
+
+[project.urls]
+Homepage = "https://github.com/WarderHouse/claim-verifier"
+Repository = "https://github.com/WarderHouse/claim-verifier"
+Issues = "https://github.com/WarderHouse/claim-verifier/issues"
 
 [project.scripts]
 claimverify = "claimverify.cli:main"
@@ -43,6 +49,9 @@ path = "src/claimverify/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/claimverify"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["private/", "reports/", ".venv/"]
 
 [tool.ruff]
 line-length = 88

@@ -4,7 +4,8 @@ title: "claim-verifier: flag citation-bearing claims for human checking against 
 authors:
   - family-names: Crocco
     given-names: Oliver S.
-version: 0.1.0
-date-released: 2026-08-15
+    orcid: "https://orcid.org/0000-0001-8472-1224"
+version: 0.2.0
+date-released: 2026-08-17
 license: MIT
 repository-code: "https://github.com/WarderHouse/claim-verifier"

@@ -48,11 +48,14 @@ Never add "unsupported" or "fabricated" framing to any verdict.
 ## Running and testing
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e . pytest ruff
-.venv/bin/pytest -q
-.venv/bin/ruff check . && .venv/bin/ruff format --check .
-.venv/bin/claimverify --manuscript paper.pdf --bank sources/ --list-claims  # no model
+uv sync
+uv run pytest -q
+uv run ruff check . && uv run ruff format --check .
+uv run claimverify --manuscript examples/manuscript.md --bank examples/sources --model none  # offline
 ```
+
+(No uv? `python3 -m venv .venv && .venv/bin/pip install -e . pytest ruff` works too;
+CI uses `uv sync --frozen` against the committed uv.lock.)
 
 ## Layout
 

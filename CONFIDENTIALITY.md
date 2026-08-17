@@ -12,6 +12,12 @@ full texts, the retrieved passages, and the model's assessments never leave
 your machine. Retrieval (BM25) is pure Python, offline. There is no telemetry,
 no update check, and no call to any external service.
 
+The local call deliberately ignores `HTTP_PROXY`/`HTTPS_PROXY` environment
+variables and system proxy settings (`trust_env` is disabled): on
+proxy-configured machines, HTTP libraries otherwise route even localhost
+traffic through the proxy, which would silently break this promise on exactly
+the managed university machines where it matters most.
+
 ## `--model none`: no model at all
 
 Retrieval-only mode produces the claim list and the top passages for fully
@@ -20,8 +26,9 @@ manual checking. Nothing leaves the machine and no model runs.
 ## `--model anthropic:...`: explicitly off-machine
 
 The Anthropic provider sends, for each claim-source pair, the claim sentence
-and its immediate context, the reference entry, and the retrieved source
-passages to the Anthropic API. Use this only for manuscripts you are entitled
+and its immediate context, the reference entry, the bank filename of the
+matched source (filenames you chose, which can themselves be revealing), the
+fixed system prompt, and the retrieved source passages to the Anthropic API. Use this only for manuscripts you are entitled
 to share, such as your own drafts before submission. Do not use it for
 manuscripts you are reviewing unless the journal's policy explicitly permits
 it. The API key comes from the `ANTHROPIC_API_KEY` environment variable and is

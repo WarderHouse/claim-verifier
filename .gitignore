@@ -5,3 +5,4 @@ dist/
 *.pyc
 reports/
 private/
+dist/
